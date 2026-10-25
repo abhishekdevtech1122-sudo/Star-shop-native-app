@@ -1,7 +1,41 @@
+name: Deploy Flutter Web
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Surgical Python Fix & Build Web
+        run: |
+          mkdir -p /tmp/my_code/screens
+          if [ -d "lib" ]; then cp -r lib/* /tmp/my_code/ 2>/dev/null || true; fi
+          if [ -d "screens" ]; then cp -r screens/* /tmp/my_code/screens/ 2>/dev/null || true; fi
+
+          flutter create --platforms web --project-name star_shop_app . --overwrite
+
+          mkdir -p lib/screens lib/models lib/data lib/widgets
+          cp -r /tmp/my_code/* lib/ 2>/dev/null || true
+          cp -r /tmp/my_code/screens/* lib/screens/ 2>/dev/null || true
+
           python3 -c '
           import os
 
-          # 1. Fix white45 and Import typo across all dart files
+          # 1. Fix Capital Import and Colors.white45
           for root, _, files in os.walk("lib"):
               for f in files:
                   if f.endswith(".dart"):
@@ -13,100 +47,32 @@
                       with open(p, "w", encoding="utf-8") as file:
                           file.write(content)
 
-          # 2. Generate complete lib/models/shop.dart with message & isReel
-          shop_code = """
-          class Shop {
-            final String id;
-            final String name;
-            final String category;
-            final String offer;
-            final String address;
-            final String phone;
-            final bool openToday;
-            final bool highDiscount;
-            final String image;
-            final double rating;
-            final String description;
-            final String pin;
-            final String timing;
-            final List<String> gallery;
-
-            const Shop({
-              required this.id,
-              required this.name,
-              required this.category,
-              required this.offer,
-              required this.address,
-              required this.phone,
-              this.openToday = true,
-              this.highDiscount = false,
-              this.image = "",
-              this.rating = 4.8,
-              this.description = "Star Shop Verified Partner Deal",
-              this.pin = "1234",
-              this.timing = "10:00 AM - 9:00 PM",
-              this.gallery = const [],
-            });
-          }
-
-          class FeedPost {
-            final String id;
-            final String shopId;
-            final String shopName;
-            final String caption;
-            final String image;
-            final int likes;
-            final String category;
-            final String offer;
-            final bool isReel;
-
-            const FeedPost({
-              this.id = "p1",
-              required this.shopId,
-              required this.shopName,
-              required this.caption,
-              required this.image,
-              this.likes = 24,
-              this.category = "ALL",
-              this.offer = "Special Deal",
-              this.isReel = false,
-            });
-          }
-
-          class AlertItem {
-            final String id;
-            final String shopId;
-            final String title;
-            final String subtitle;
-            final String message;
-            final String time;
-            final bool highDiscount;
-            final bool isVideo;
-
-            const AlertItem({
-              this.id = "a1",
-              this.shopId = "s1",
-              this.title = "स्पेशल स्टार अलर्ट",
-              this.subtitle = "सीमित समय का ऑफर",
-              this.message = "रॉयल स्टार फैशन हब में 40% की सीधी छूट लाइव है!",
-              this.time = "अभी",
-              this.highDiscount = false,
-              this.isVideo = false,
-            });
-          }
-
-          class ClaimRecord {
-            final String shopName;
-            final String offer;
-            final DateTime date;
-
-            const ClaimRecord({
-              required this.shopName,
-              required this.offer,
-              required this.date,
-            });
-          }
-          """
-          with open("lib/models/shop.dart", "w", encoding="utf-8") as f:
-              f.write(shop_code.strip())
+          # 2. Ensure shop.dart has message and isReel
+          shop_path = "lib/models/shop.dart"
+          if os.path.exists(shop_path):
+              with open(shop_path, "r", encoding="utf-8") as file:
+                  code = file.read()
+              if "class AlertItem" in code and "message" not in code:
+                  code = code.replace("class AlertItem {", "class AlertItem {\n  final String message;")
+                  code = code.replace("const AlertItem({", "const AlertItem({\n    this.message = \"\",")
+              if "class FeedPost" in code and "isReel" not in code:
+                  code = code.replace("class FeedPost {", "class FeedPost {\n  final bool isReel;")
+                  code = code.replace("const FeedPost({", "const FeedPost({\n    this.isReel = false,")
+              with open(shop_path, "w", encoding="utf-8") as file:
+                  file.write(code)
           '
+
+          flutter pub get
+          flutter build web --release --base-href "/Star-shop-native-app/"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'build/web'
+
+deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  steps:
+    - name: Deploy to GitHub Pages
+      uses: actions/deploy-pages@v4
