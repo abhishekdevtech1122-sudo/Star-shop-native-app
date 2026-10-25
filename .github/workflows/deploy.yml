@@ -1,8 +1,13 @@
-Name: Deploy Flutter Web
+name: Deploy Flutter Web
 
 on:
   push:
     branches: [ main ]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -14,10 +19,9 @@ jobs:
           flutter-version: '3.x'
           channel: 'stable'
       - run: flutter pub get
-      - run: flutter build web --base-href "/star-shop-native-app/"
+      - run: flutter build web --base-href "/Star-shop-native-app/"
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: build/web   
- 
+          publish_dir: build/web
