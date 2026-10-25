@@ -20,27 +20,45 @@ jobs:
           flutter-version: '3.x'
           channel: 'stable'
 
-      - name: Auto-Fix Project Structure & Missing Files
+      - name: Smart Build & Auto-Error Reporter
         run: |
-          # अगर screens फोल्डर बाहर है तो उसे lib के अंदर मूव करो
-          if [ -d "screens" ]; then
-            mkdir -p lib/screens
-            cp -r screens/* lib/screens/
-          fi
-          # अपनी असली फाइलों का बैकअप लो
-          cp -r lib /tmp/backup_lib
-          # सर्वर पर खुद pubspec.yaml और web फोल्डर जनरेट कराओ
-          flutter create . --project-name star_shop_app --platforms web
-          # अपनी असली फाइलें वापस प्रोजेक्ट में डालो
-          cp -r /tmp/backup_lib/* lib/
+          # 1. अपनी असली डार्ट फाइलों को सुरक्षित जगह रखो
+          mkdir -p /tmp/my_code/screens
+          if [ -d "lib" ]; then cp -r lib/* /tmp/my_code/ 2>/dev/null || true; fi
+          if [ -d "screens" ]; then cp -r screens/* /tmp/my_code/screens/ 2>/dev/null || true; fi
 
-      - name: Build Flutter Web
-        run: |
+          # 2. एक साफ-सुथरा नया फ्लटर वेब प्रोजेक्ट जनरेट करो
+          flutter create --platforms web --project-name star_shop_app . --overwrite
+
+          # 3. अपनी फाइलें सही जगह (lib और lib/screens दोनों जगह सेफ्टी के लिए) वापस डालो
+          mkdir -p lib/screens
+          cp -r /tmp/my_code/* lib/ 2>/dev/null || true
+          cp -r /tmp/my_code/screens/* lib/screens/ 2>/dev/null || true
+
+          # 4. कोड में अगर कोई बाहरी पैकेज इम्पोर्ट है तो उसे खुद पहचानकर इंस्टॉल करो
+          PACKAGES=$(grep -rh "import 'package:" lib/ | sed -E "s/.*import 'package:([^\/]+)\/.*/\1/" | sort -u | grep -v "flutter" | grep -v "star_shop_app" || true)
+          for pkg in $PACKAGES; do
+            echo "Auto-installing package: $pkg"
+            flutter pub add $pkg || true
+          done
+
+          # 5. वेब बिल्ड चलाओ और एक-एक शब्द लॉग फाइल में रिकॉर्ड करो
           flutter pub get
-          flutter build web --release --base-href "/Star-shop-native-app/"
+          if flutter build web --release --base-href "/Star-shop-native-app/" > BUILD_LOG.txt 2>&1; then
+            echo "BUILD SUCCESSFUL!" >> BUILD_LOG.txt
+          else
+            echo "BUILD FAILED! Pushing error log directly to repo..."
+            git config user.name "Auto-Debugger"
+            git config user.email "debug@starshop.com"
+            git add BUILD_LOG.txt
+            git commit -m "Auto-Report: Build Error Log"
+            git push origin main
+            exit 1
+          fi
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./build/web
+          
