@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -20,7 +20,7 @@ jobs:
           flutter-version: '3.x'
           channel: 'stable'
 
-      - name: Final Python Surgery & Web Build
+      - name: Python Fix & Build Web
         run: |
           mkdir -p /tmp/my_code/screens
           if [ -d "lib" ]; then cp -r lib/* /tmp/my_code/ 2>/dev/null || true; fi
@@ -34,8 +34,6 @@ jobs:
 
           python3 -c '
           import os
-
-          # 1. Fix Capital Import AND Colors.white45 across all dart files
           for root, _, files in os.walk("lib"):
               for f in files:
                   if f.endswith(".dart"):
@@ -46,221 +44,19 @@ jobs:
                       content = content.replace("Colors.white45", "Colors.white54")
                       with open(p, "w", encoding="utf-8") as file:
                           file.write(content)
-
-          # 2. Generate complete lib/models/shop.dart (with message & isReel)
-          shop_code = """
-          class Shop {
-            final String id;
-            final String name;
-            final String category;
-            final String offer;
-            final String address;
-            final String phone;
-            final bool openToday;
-            final bool highDiscount;
-            final String image;
-            final double rating;
-            final String description;
-            final String pin;
-            final String timing;
-            final List<String> gallery;
-
-            const Shop({
-              required this.id,
-              required this.name,
-              required this.category,
-              required this.offer,
-              required this.address,
-              required this.phone,
-              this.openToday = true,
-              this.highDiscount = false,
-              this.image = "",
-              this.rating = 4.8,
-              this.description = "Star Shop Verified Partner Deal",
-              this.pin = "1234",
-              this.timing = "10:00 AM - 9:00 PM",
-              this.gallery = const [],
-            });
-          }
-
-          class FeedPost {
-            final String id;
-            final String shopId;
-            final String shopName;
-            final String caption;
-            final String image;
-            final int likes;
-            final String category;
-            final String offer;
-            final bool isReel;
-
-            const FeedPost({
-              this.id = "p1",
-              required this.shopId,
-              required this.shopName,
-              required this.caption,
-              required this.image,
-              this.likes = 24,
-              this.category = "ALL",
-              this.offer = "Special Deal",
-              this.isReel = false,
-            });
-          }
-
-          class AlertItem {
-            final String id;
-            final String shopId;
-            final String title;
-            final String subtitle;
-            final String message;
-            final String time;
-            final bool highDiscount;
-            final bool isVideo;
-
-            const AlertItem({
-              this.id = "a1",
-              this.shopId = "s1",
-              this.title = "स्पेशल स्टार अलर्ट",
-              this.subtitle = "सीमित समय का ऑफर",
-              this.message = "रॉयल स्टार फैशन हब में 40% की सीधी छूट लाइव है!",
-              this.time = "अभी",
-              this.highDiscount = false,
-              this.isVideo = false,
-            });
-          }
-
-          class ClaimRecord {
-            final String shopName;
-            final String offer;
-            final DateTime date;
-
-            const ClaimRecord({
-              required this.shopName,
-              required this.offer,
-              required this.date,
-            });
-          }
-          """
-          with open("lib/models/shop.dart", "w", encoding="utf-8") as f:
-              f.write(shop_code.strip())
-
-          # 3. Generate lib/data/demo_data.dart
-          demo_code = """
-          import "../models/shop.dart";
-
-          const List<String> demoCategories = ["ALL", "OPEN TODAY", "HIGH DISCOUNT", "FASHION", "FOOD", "ELECTRONICS"];
-
-          const List<Shop> demoShops = [
-            Shop(
-              id: "s1",
-              name: "रॉयल स्टार फैशन हब",
-              category: "FASHION",
-              offer: "40% FLAT OFF",
-              address: "मेन मार्केट, दिल्ली",
-              phone: "9876543210",
-              openToday: true,
-              highDiscount: true,
-            ),
-            Shop(
-              id: "s2",
-              name: "गोल्डन बाइट कैफे",
-              category: "FOOD",
-              offer: "BUY 1 GET 1 FREE",
-              address: "सेंट्रल प्लाजा, सेक्टर 4",
-              phone: "9876543211",
-              openToday: true,
-              highDiscount: false,
-            ),
-          ];
-
-          const List<FeedPost> demoPosts = [
-            FeedPost(
-              id: "p1",
-              shopId: "s1",
-              shopName: "रॉयल स्टार फैशन हब",
-              caption: "प्रीमियम कलेक्शन पर आज विशेष छूट उपलब्ध है!",
-              image: "",
-              isReel: true,
-            ),
-          ];
-
-          const List<AlertItem> demoAlerts = [
-            AlertItem(
-              id: "a1",
-              shopId: "s1",
-              title: "रॉयल स्टार फैशन हब में 40% छूट!",
-              subtitle: "सीमित समय के लिए स्पेशल स्टार ऑफर",
-              message: "रॉयल स्टार फैशन हब में 40% छूट! अभी क्लेम करें।",
-              highDiscount: true,
-            ),
-          ];
-          """
-          with open("lib/data/demo_data.dart", "w", encoding="utf-8") as f:
-              f.write(demo_code.strip())
-
-          # 4. Generate lib/widgets/store_card.dart
-          card_code = """
-          import "package:flutter/material.dart";
-          import "../models/shop.dart";
-
-          class StoreCard extends StatelessWidget {
-            final Shop shop;
-            final bool premium;
-            final bool unlocked;
-            final int claimCount;
-            final VoidCallback? onDetails;
-            final VoidCallback? onClaim;
-
-            const StoreCard({
-              super.key,
-              required this.shop,
-              this.premium = false,
-              this.unlocked = true,
-              this.claimCount = 0,
-              this.onDetails,
-              this.onClaim,
-            });
-
-            @override
-            Widget build(BuildContext context) {
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                color: premium ? const Color(0xFF151515) : Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.all(14),
-                  title: Text(shop.name, style: TextStyle(fontWeight: FontWeight.w900, color: premium ? Colors.white : Colors.black87)),
-                  subtitle: Text("${shop.offer} • ${shop.address}", style: const TextStyle(color: Color(0xFFB38728), fontWeight: FontWeight.w700)),
-                  trailing: ElevatedButton(
-                    onPressed: onClaim ?? onDetails,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
-                    child: const Text("क्लेम करें"),
-                  ),
-                  onTap: onDetails,
-                ),
-              );
-            }
-          }
-          """
-          with open("lib/widgets/store_card.dart", "w", encoding="utf-8") as f:
-              f.write(card_code.strip())
           '
 
           flutter pub get
-          if flutter build web --release --base-href "/Star-shop-native-app/" > BUILD_LOG.txt 2>&1; then
-            echo "BUILD 100% SUCCESSFUL!"
-          else
-            git config user.name "Auto-Debugger"
-            git config user.email "debug@starshop.com"
-            git pull --rebase origin main || true
-            git add BUILD_LOG.txt
-            git commit -m "Auto-Report: Updated Build Log" || true
-            git push origin main || true
-            exit 1
-          fi
+          flutter build web --release --base-href "/Star-shop-native-app/"
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
+          path: 'build/web'
+
+deploy:
+  needs: build
+  runs-on: ubuntu-latest
+  steps:
+    - name: Deploy to GitHub Pages
+      uses: actions/deploy-pages@v4
