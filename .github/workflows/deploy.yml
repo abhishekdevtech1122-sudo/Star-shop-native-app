@@ -1,1 +1,238 @@
+name: Deploy Flutter Web
 
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Auto-Fix Typos, Generate Missing Modules & Build
+        run: |
+          # 1. अपनी मौजूदा फाइलों को सुरक्षित निकालो
+          mkdir -p /tmp/my_code/screens
+          if [ -d "lib" ]; then cp -r lib/* /tmp/my_code/ 2>/dev/null || true; fi
+          if [ -d "screens" ]; then cp -r screens/* /tmp/my_code/screens/ 2>/dev/null || true; fi
+
+          # 2. ताज़ा फ्लटर वेब स्ट्रक्चर जनरेट करो
+          flutter create --platforms web --project-name star_shop_app . --overwrite
+
+          # 3. अपनी फाइलें वापस lib में डालो
+          mkdir -p lib/screens lib/models lib/data lib/widgets
+          cp -r /tmp/my_code/* lib/ 2>/dev/null || true
+          cp -r /tmp/my_code/screens/* lib/screens/ 2>/dev/null || true
+
+          # 4. सर्जिकल स्ट्राइक: मोबाइल कीबोर्ड वाले 'Import' को 'import' में बदलो
+          find lib/ -name "*.dart" -exec sed -i 's/Import /import /g' {} +
+
+          # 5. गायब फाइल 1: अगर lib/models/shop.dart नहीं है तो उसे तुरंत बनाओ
+          if [ ! -f "lib/models/shop.dart" ]; then
+            cat << 'EOF' > lib/models/shop.dart
+          class Shop {
+            final String id;
+            final String name;
+            final String category;
+            final String offer;
+            final String address;
+            final String phone;
+            final bool openToday;
+            final bool highDiscount;
+            final String image;
+            final double rating;
+            final String description;
+
+            const Shop({
+              required this.id,
+              required this.name,
+              required this.category,
+              required this.offer,
+              required this.address,
+              required this.phone,
+              this.openToday = true,
+              this.highDiscount = false,
+              this.image = '',
+              this.rating = 4.8,
+              this.description = 'Star Shop Verified Partner Deal',
+            });
+          }
+
+          class FeedPost {
+            final String id;
+            final String shopId;
+            final String shopName;
+            final String caption;
+            final String image;
+            final int likes;
+
+            const FeedPost({
+              this.id = 'p1',
+              required this.shopId,
+              required this.shopName,
+              required this.caption,
+              required this.image,
+              this.likes = 24,
+            });
+          }
+
+          class AlertItem {
+            final String id;
+            final String shopId;
+            final String title;
+            final String subtitle;
+            final String time;
+            final bool highDiscount;
+            final bool isVideo;
+
+            const AlertItem({
+              this.id = 'a1',
+              this.shopId = 's1',
+              required this.title,
+              required this.subtitle,
+              this.time = 'अभी',
+              this.highDiscount = false,
+              this.isVideo = false,
+            });
+          }
+
+          class ClaimRecord {
+            final String shopName;
+            final String offer;
+            final DateTime date;
+
+            const ClaimRecord({
+              required this.shopName,
+              required this.offer,
+              required this.date,
+            });
+          }
+          EOF
+          fi
+
+          # 6. गायब फाइल 2: अगर lib/data/demo_data.dart नहीं है तो उसे बनाओ
+          if [ ! -f "lib/data/demo_data.dart" ]; then
+            cat << 'EOF' > lib/data/demo_data.dart
+          import '../models/shop.dart';
+
+          const List<Shop> demoShops = [
+            Shop(
+              id: 's1',
+              name: 'रॉयल स्टार फैशन हब',
+              category: 'FASHION',
+              offer: '40% FLAT OFF',
+              address: 'मेन मार्केट, दिल्ली',
+              phone: '9876543210',
+              openToday: true,
+              highDiscount: true,
+            ),
+            Shop(
+              id: 's2',
+              name: 'गोल्डन बाइट कैफे',
+              category: 'FOOD',
+              offer: 'BUY 1 GET 1 FREE',
+              address: 'सेंट्रल प्लाजा, सेक्टर 4',
+              phone: '9876543211',
+              openToday: true,
+              highDiscount: false,
+            ),
+          ];
+
+          const List<FeedPost> demoPosts = [
+            FeedPost(
+              id: 'p1',
+              shopId: 's1',
+              shopName: 'रॉयल स्टार फैशन हब',
+              caption: 'प्रीमियम कलेक्शन पर आज विशेष छूट उपलब्ध है!',
+              image: '',
+            ),
+          ];
+
+          const List<AlertItem> demoAlerts = [
+            AlertItem(
+              id: 'a1',
+              shopId: 's1',
+              title: 'रॉयल स्टार फैशन हब में 40% छूट!',
+              subtitle: 'सीमित समय के लिए स्पेशल स्टार ऑफर',
+              highDiscount: true,
+            ),
+          ];
+          EOF
+          fi
+
+          # 7. गायब फाइल 3: अगर lib/widgets/store_card.dart नहीं है तो उसे बनाओ
+          if [ ! -f "lib/widgets/store_card.dart" ]; then
+            cat << 'EOF' > lib/widgets/store_card.dart
+          import 'package:flutter/material.dart';
+          import '../models/shop.dart';
+
+          class StoreCard extends StatelessWidget {
+            final Shop shop;
+            final bool premium;
+            final bool unlocked;
+            final int claimCount;
+            final VoidCallback? onDetails;
+            final VoidCallback? onClaim;
+
+            const StoreCard({
+              super.key,
+              required this.shop,
+              this.premium = false,
+              this.unlocked = true,
+              this.claimCount = 0,
+              this.onDetails,
+              this.onClaim,
+            });
+
+            @override
+            Widget build(BuildContext context) {
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                color: premium ? const Color(0xFF151515) : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(14),
+                  title: Text(shop.name, style: TextStyle(fontWeight: FontWeight.w900, color: premium ? Colors.white : Colors.black87)),
+                  subtitle: Text('${shop.offer} • ${shop.address}', style: TextStyle(color: const Color(0xFFB38728), fontWeight: FontWeight.w700)),
+                  trailing: ElevatedButton(
+                    onPressed: onClaim ?? onDetails,
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD4AF37), foregroundColor: Colors.black),
+                    child: const Text('क्लेम करें'),
+                  ),
+                  onTap: onDetails,
+                ),
+              );
+            }
+          }
+          EOF
+          fi
+
+          # 8. कंपाइल करो और अगर कोई एरर बचे तो BUILD_LOG.txt को अपडेट करो
+          flutter pub get
+          if flutter build web --release --base-href "/Star-shop-native-app/" > BUILD_LOG.txt 2>&1; then
+            echo "BUILD 100% SUCCESSFUL!" > BUILD_LOG.txt
+          else
+            git config user.name "Auto-Debugger"
+            git config user.email "debug@starshop.com"
+            git add BUILD_LOG.txt
+            git commit -m "Updated Build Error Log"
+            git push origin main
+            exit 1
+          fi
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
