@@ -1,78 +1,62 @@
-name: Deploy Flutter Web
+name: Deploy Star Shop Flutter Web
 
 on:
   push:
-    branches: [ main ]
+    branches: [main] # If your default branch is named master, replace main with master.
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v6
 
-      - uses: subosito/flutter-action@v2
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
-          channel: 'stable'
+          channel: stable
+          cache: true
 
-      - name: Surgical Python Fix & Build Web
+      - name: Add Flutter Web support if missing
         run: |
-          mkdir -p /tmp/my_code/screens
-          if [ -d "lib" ]; then cp -r lib/* /tmp/my_code/ 2>/dev/null || true; fi
-          if [ -d "screens" ]; then cp -r screens/* /tmp/my_code/screens/ 2>/dev/null || true; fi
+          if [ ! -d web ]; then
+            flutter create . --platforms=web
+          fi
 
-          flutter create --platforms web --project-name star_shop_app . --overwrite
+      - name: Get Flutter packages
+        run: flutter pub get
 
-          mkdir -p lib/screens lib/models lib/data lib/widgets
-          cp -r /tmp/my_code/* lib/ 2>/dev/null || true
-          cp -r /tmp/my_code/screens/* lib/screens/ 2>/dev/null || true
+      # GitHub Pages project sites are served from /<repository-name>/.
+      # For a custom domain or an OWNER.github.io repository, change this to --base-href "/".
+      - name: Build Flutter Web
+        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
 
-          python3 -c '
-          import os
-
-          # 1. Fix Capital Import and Colors.white45
-          for root, _, files in os.walk("lib"):
-              for f in files:
-                  if f.endswith(".dart"):
-                      p = os.path.join(root, f)
-                      with open(p, "r", encoding="utf-8") as file:
-                          content = file.read()
-                      content = content.replace("Import \x27", "import \x27").replace("Import \"", "import \"")
-                      content = content.replace("Colors.white45", "Colors.white54")
-                      with open(p, "w", encoding="utf-8") as file:
-                          file.write(content)
-
-          # 2. Ensure shop.dart has message and isReel
-          shop_path = "lib/models/shop.dart"
-          if os.path.exists(shop_path):
-              with open(shop_path, "r", encoding="utf-8") as file:
-                  code = file.read()
-              if "class AlertItem" in code and "message" not in code:
-                  code = code.replace("class AlertItem {", "class AlertItem {\n  final String message;")
-                  code = code.replace("const AlertItem({", "const AlertItem({\n    this.message = \"\",")
-              if "class FeedPost" in code and "isReel" not in code:
-                  code = code.replace("class FeedPost {", "class FeedPost {\n  final bool isReel;")
-                  code = code.replace("const FeedPost({", "const FeedPost({\n    this.isReel = false,")
-              with open(shop_path, "w", encoding="utf-8") as file:
-                  file.write(code)
-          '
-
-          flutter pub get
-          flutter build web --release --base-href "/Star-shop-native-app/"
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
         with:
-          path: 'build/web'
+          path: build/web
 
-deploy:
-  needs: build
-  runs-on: ubuntu-latest
-  steps:
-    - name: Deploy to GitHub Pages
-      uses: actions/deploy-pages@v4
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
