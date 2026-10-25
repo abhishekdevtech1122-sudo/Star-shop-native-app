@@ -20,7 +20,7 @@ jobs:
           flutter-version: '3.x'
           channel: 'stable'
 
-      - name: Python Surgery & Web Build
+      - name: Final Python Surgery & Web Build
         run: |
           mkdir -p /tmp/my_code/screens
           if [ -d "lib" ]; then cp -r lib/* /tmp/my_code/ 2>/dev/null || true; fi
@@ -33,9 +33,9 @@ jobs:
           cp -r /tmp/my_code/screens/* lib/screens/ 2>/dev/null || true
 
           python3 -c '
-          import os, glob
+          import os
 
-          # 1. Fix Capital Import typo across all dart files
+          # 1. Fix Capital Import AND Colors.white45 across all dart files
           for root, _, files in os.walk("lib"):
               for f in files:
                   if f.endswith(".dart"):
@@ -43,10 +43,11 @@ jobs:
                       with open(p, "r", encoding="utf-8") as file:
                           content = file.read()
                       content = content.replace("Import \x27", "import \x27").replace("Import \"", "import \"")
+                      content = content.replace("Colors.white45", "Colors.white54")
                       with open(p, "w", encoding="utf-8") as file:
                           file.write(content)
 
-          # 2. Generate lib/models/shop.dart
+          # 2. Generate complete lib/models/shop.dart (with message & isReel)
           shop_code = """
           class Shop {
             final String id;
@@ -91,6 +92,7 @@ jobs:
             final int likes;
             final String category;
             final String offer;
+            final bool isReel;
 
             const FeedPost({
               this.id = "p1",
@@ -101,6 +103,7 @@ jobs:
               this.likes = 24,
               this.category = "ALL",
               this.offer = "Special Deal",
+              this.isReel = false,
             });
           }
 
@@ -109,6 +112,7 @@ jobs:
             final String shopId;
             final String title;
             final String subtitle;
+            final String message;
             final String time;
             final bool highDiscount;
             final bool isVideo;
@@ -116,8 +120,9 @@ jobs:
             const AlertItem({
               this.id = "a1",
               this.shopId = "s1",
-              required this.title,
-              required this.subtitle,
+              this.title = "स्पेशल स्टार अलर्ट",
+              this.subtitle = "सीमित समय का ऑफर",
+              this.message = "रॉयल स्टार फैशन हब में 40% की सीधी छूट लाइव है!",
               this.time = "अभी",
               this.highDiscount = false,
               this.isVideo = false,
@@ -136,9 +141,8 @@ jobs:
             });
           }
           """
-          if not os.path.exists("lib/models/shop.dart"):
-              with open("lib/models/shop.dart", "w", encoding="utf-8") as f:
-                  f.write(shop_code.strip())
+          with open("lib/models/shop.dart", "w", encoding="utf-8") as f:
+              f.write(shop_code.strip())
 
           # 3. Generate lib/data/demo_data.dart
           demo_code = """
@@ -176,6 +180,7 @@ jobs:
               shopName: "रॉयल स्टार फैशन हब",
               caption: "प्रीमियम कलेक्शन पर आज विशेष छूट उपलब्ध है!",
               image: "",
+              isReel: true,
             ),
           ];
 
@@ -185,13 +190,13 @@ jobs:
               shopId: "s1",
               title: "रॉयल स्टार फैशन हब में 40% छूट!",
               subtitle: "सीमित समय के लिए स्पेशल स्टार ऑफर",
+              message: "रॉयल स्टार फैशन हब में 40% छूट! अभी क्लेम करें।",
               highDiscount: true,
             ),
           ];
           """
-          if not os.path.exists("lib/data/demo_data.dart"):
-              with open("lib/data/demo_data.dart", "w", encoding="utf-8") as f:
-                  f.write(demo_code.strip())
+          with open("lib/data/demo_data.dart", "w", encoding="utf-8") as f:
+              f.write(demo_code.strip())
 
           # 4. Generate lib/widgets/store_card.dart
           card_code = """
@@ -237,14 +242,13 @@ jobs:
             }
           }
           """
-          if not os.path.exists("lib/widgets/store_card.dart"):
-              with open("lib/widgets/store_card.dart", "w", encoding="utf-8") as f:
-                  f.write(card_code.strip())
+          with open("lib/widgets/store_card.dart", "w", encoding="utf-8") as f:
+              f.write(card_code.strip())
           '
 
           flutter pub get
           if flutter build web --release --base-href "/Star-shop-native-app/" > BUILD_LOG.txt 2>&1; then
-            echo "BUILD SUCCESSFUL!" >> BUILD_LOG.txt
+            echo "BUILD 100% SUCCESSFUL!"
           else
             git config user.name "Auto-Debugger"
             git config user.email "debug@starshop.com"
